@@ -1,0 +1,531 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: CFN script to provision the required infrastructure for IBM zD&T
+
+Metadata: {}
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      id: ami-0706d92706869e46f 
+    us-west-2:
+      id: ami-06f03a76f0e5faeb4
+
+Conditions: {}
+
+Outputs: #jwfbean - from cflt 
+  LicenseServerPrivateIP:
+    Description: The private IP address of the License Server
+    Value: !GetAtt LicenseServer.PrivateIp
+  LicenseServerPublicIP:
+    Description: The public IP address of the License Server
+    Value: !GetAtt LicenseServer.PublicIp
+  LicenseServerPublicDNS:
+    Description: The public DNS address of the License Server
+    Value: !GetAtt LicenseServer.PublicDnsName
+  EnterpriseServerPrivateIP:
+    Description: The private IP address of the Enterprise Server
+    Value: !GetAtt EnterpriseServer.PrivateIp
+
+  EnterpriseServerPublicIP:
+    Description: The public IP address of the Enterprise Server
+    Value: !GetAtt EnterpriseServer.PublicIp
+  EnterpriseServerPublicDNS:
+    Description: The public IP address of the Enterprise Server
+    Value: !GetAtt EnterpriseServer.PublicDnsName
+  EnterpriseServerAdminConsoleURL:
+    Description: The URL to access the Enterprise Server Admin Console
+    Value:
+      !Join
+        - ''
+        - - "https://"
+          - !GetAtt EnterpriseServer.PublicDnsName
+          - ":9443/ZDTMC/index.html"
+  EnterpriseServerOpenApiURL:
+    Description: The URL to access the Enterprise Server Admin Console
+    Value:
+      !Join
+        - ''
+        - - "https://"
+          - !GetAtt EnterpriseServer.PublicDnsName
+          - ":9443/api/explorer"
+  EnterpriseServerAdminConsoleUser:
+    Description: The user to access the Enterprise Server Admin Console
+    Value: zdtadmin
+  EnterpriseServerAdminConsolePassword:
+    Description: The password to access the Enterprise Server Admin Console
+    Value: password
+
+
+Parameters:
+  UserCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 0.0.0.0/0
+    Description: |
+      Your home/office network CIDR block or IP address to access EC2 instances remotely (eg 178.31.18.0/24 or 178.31.18.201/32).
+      This will be used to allow ingress in the security group.
+      Using 0.0.0.0/0 will allow access from any IP, we recommend you change it to you home/office network CIDR block.
+    Type: String
+  VPCCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.0.0.0/16
+    Description: VPC CIDR Block (eg 10.0.0.0/16)
+    Type: String
+  AvailabilityZone:
+    Description: The AvailabilityZone to use
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-west-2c #jwfbean
+  SubnetCIDR:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.0.0.0/24
+    Description: VPC CIDR Block for the Public Subnet (eg 10.0.0.0/24)
+    Type: String
+  LicenseServerInstanceType:
+    Description: Instance type for the License Server. # This server should be provisioned on a dedicated host.
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.medium
+      - t3.large
+      - t3a.medium
+      - t3a.large
+      - m5.large
+      - m5.xlarge
+      - m5a.large
+      - m5a.xlarge
+  EmulatorServerInstanceType:
+    Description: Instance type for the Emulator Server, where z/OS will run on top of zD&T. By default 3 CPs will be created, and 12GB of RAM will be assigned to z/OS.
+    Type: String
+    Default: m5.xlarge
+    AllowedValues:
+      - m5.xlarge
+      - m5a.xlarge
+      - m5.2xlarge
+      - m5a.2xlarge
+      - c5.2xlarge
+      - c5a.2xlarge
+  EnterpriseServerInstanceType:
+    Description: Instance type for the EE Server, which will also work as the File Server.
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.medium
+      - t3.large
+      - t3a.medium
+      - t3a.large
+      - m5.large
+      - m5.xlarge
+      - m5a.large
+      - m5a.xlarge
+  KeyPair:
+    Description: Key pair to be used with the instances that will be created.
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: mainframe-cflt #jwfbean
+  S3BucketName:
+    Default: tmm-zdt # jwfbean
+    Description: S3 bucket that contains the IBM zD&T installer and ADCD volumes.
+    Type: String
+  Installer:
+    Description: File name of the Enterprise Edition installer, must be in the s3 bucket, inside a folder called 'installer'
+    Type: String
+    Default: zdt-install.tgz #jwfbean 
+  InstallerUnpackedName: #jwfbean
+    Description: File name of the installer when unpacked from tgz.
+    Type: String
+    Default: zdt-install
+  ADCDVersion:
+    Description: Version of ADCD to use when creating a default image. Must be preset in S3 bucket.
+    Type: String
+    Default: dec2021
+
+
+Resources:
+  S3Role: 
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-IAM-Role-${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+  S3RolePolicies: 
+    Type: AWS::IAM::Policy
+    Properties: 
+      PolicyName: !Sub zDT-IAM-Policy-${AWS::StackName}
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Action: ["s3:Get*","s3:List*","s3:Put*"]
+            Resource: [!Sub "arn:aws:s3:::${S3BucketName}/*", !Sub "arn:aws:s3:::${S3BucketName}"]
+      Roles: 
+        - 
+          !Ref S3Role
+  S3InstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - 
+          !Ref S3Role
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        !Ref VPCCidrBlock
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-EC2-VPC-${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-EC2-InternetGateway-${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+        !Ref InternetGateway
+      VpcId:
+        !Ref VPC
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-EC2-RouteTable-${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+      VpcId:
+        !Ref VPC
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        !Ref InternetGateway
+      RouteTableId:
+        !Ref RouteTable
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      CidrBlock: !Ref SubnetCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-EC2-Subnet-${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+      VpcId: !Ref VPC
+  SubnetAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        !Ref RouteTable
+      SubnetId:
+        !Ref Subnet
+  SecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub zDT-EC2-SecurityGroup-${AWS::StackName}
+      GroupDescription: Security group for the License Server, Enterprise Server and File Server
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp 
+          FromPort: 20
+          ToPort: 22
+          CidrIp: !Ref UserCidrBlock
+        - IpProtocol: tcp 
+          FromPort: 9443
+          ToPort: 9443
+          CidrIp: !Ref UserCidrBlock
+        - IpProtocol: tcp 
+          FromPort: 2022
+          ToPort: 2023
+          CidrIp: !Ref UserCidrBlock
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-EC2-SecurityGroup-${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+  SecGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allows communication between zD&T components
+      GroupId: !Ref SecGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref SecGroup
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-EC2-SecurityGroupIngress-${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+  LicenseServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref KeyPair
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", id]
+      InstanceType: !Ref LicenseServerInstanceType
+      IamInstanceProfile: !Ref S3InstanceProfile
+      Monitoring: true
+      SubnetId: !Ref Subnet
+      SecurityGroupIds:
+        - !Ref SecGroup
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash -ex
+          exec > /tmp/startup.log 2>&1
+          echo "
+          **********************************************************************
+          *! ! ! ! ! ! ! ! ! !  D O   N O T   S H U T D O W N  ! ! ! ! ! ! ! ! *
+          *******************************Warning********************************
+          Software-based License Server needs to be a static resource in any
+          infrastructure configuration. In a virtualized or cloud infrastructure,
+          it does not tolerate physical moving. If the Software-based License Server
+          is manually or automatically moved return the license before moving,
+          acquire the license after movement, and configure the Software-based
+          License Server again." > /etc/motd
+          echo "alias shutdown='echo "\""DO NOT SHUTDOWN THIS INSTANCE, USE COMMAND reboot INSTEAD."\""'" >> /etc/bashrc
+          yum update -y
+          yum install unzip ftp zip bc ncurses-compat-libs -y
+          #
+          # installs AWS CLI
+          #
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          ./aws/install
+          #
+          # copies zdt installer and installs license server
+          #
+          /usr/local/bin/aws s3 cp s3://${S3BucketName}/installer/${Installer} .
+          tar -xvzf ${Installer}
+          /zdt-license-server --install --ackVM --dep
+          #
+          # generates license request and uploads it to S3
+          #
+          /opt/IBM/LDK/request_license
+          /usr/local/bin/aws s3 cp /root/*.zip s3://${S3BucketName}/
+          #
+          # creates script that checks for update file
+          #
+          echo '#!/bin/bash -x
+          rm -rf /tmp/license_applied
+          rm -rf /tmp/license_error
+          exec > /tmp/check_license.log 2>&1
+          request=$(find /root -type f -regex ".*[0-9]+.zip")
+          requestnumber=$(find /root -type f -regex ".*[0-9]+.zip" | wc -l)
+          if [ $requestnumber -gt 1 ]; then
+              echo "There is more than one license request file. Continue Manually."
+              echo "Removing cron jobs."
+              crontab -r
+              exit 8
+          fi
+          request=${!request:6}
+          update=${!request%.*}_update.zip
+          /usr/local/bin/aws s3 cp s3://${S3BucketName}/${!update} .
+          if [ -f "$update" ]; then
+              echo "License update exists."
+              /opt/IBM/LDK/update_license /root/${!update} >> /tmp/license_applied
+              if [ $? -eq 0 ]; then
+                  /usr/local/bin/aws s3 cp /tmp/license_applied s3://${S3BucketName}/
+                  echo "License successfully applied!"
+                  echo "Removing cron jobs."
+                  crontab -r
+              else
+                  echo "There was an error applying the license update."
+                  mv /tmp/license_applied /tmp/license_error
+                  /usr/local/bin/aws s3 cp /tmp/license_error s3://${S3BucketName}/
+              fi
+          else
+              echo "License update does not exist. Checking again in 5 min."
+              echo "Checked $(date)"
+          fi' > /root/check_license_bucket.sh
+          chmod +x /root/check_license_bucket.sh
+          #
+          # schedules the license check in the bucket every 5 min
+          #
+          echo "*/5 * * * * /root/check_license_bucket.sh" > /root/cron
+          crontab /root/cron
+          echo "License Server installation finished, a script scheduled on cron will be checking if the license update files is uploaded to the S3 bucket."
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-EC2-Instance-LicenseServer-${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+  EnterpriseServer:
+    Type: AWS::EC2::Instance
+    DependsOn: 
+        - LicenseServer
+    Properties:
+      KeyName: !Ref KeyPair
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", id]
+      InstanceType: !Ref EnterpriseServerInstanceType
+      IamInstanceProfile: !Ref S3InstanceProfile
+      Monitoring: true
+      SubnetId: !Ref Subnet
+      SecurityGroupIds:
+        - !Ref SecGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 100
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash -ex
+          exec > /tmp/startup.log 2>&1
+          #
+          # Install dependencies
+          #
+          yum update -y
+          yum install unzip wget vsftpd ftp jq -y
+          #
+          # installs AWS CLI
+          #
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          ./aws/install
+          #
+          # Download and unpack the ZDT installer and installs and starts the EE server
+          #
+          /usr/local/bin/aws s3 cp s3://${S3BucketName}/installer/${Installer} .
+          tar -xvzf ${Installer}
+          filename=${InstallerUnpackedName}
+          ./$filename --install --zdtee --dep -zdtee_port=9443
+          /opt/ibm/zDT/bin/startServer.sh
+          #
+          # Set up ftp server and copy ADCD volumes
+          #
+          systemctl enable vsftpd.service
+          useradd zdtftp -d /home/zdtftp
+          echo "zdtftp:zdtftp" | chpasswd
+          systemctl start vsftpd.service
+          # allow SFTP connection
+          mkdir /home/zdtftp/.ssh
+          cp /home/ec2-user/.ssh/authorized_keys /home/zdtftp/.ssh/
+          chown "zdtftp:zdtftp" /home/zdtftp/.ssh/*
+          mkdir /home/zdtftp/adcd
+          chown zdtftp /home/zdtftp/adcd
+          /usr/local/bin/aws s3 sync s3://${S3BucketName}/adcd /home/zdtftp/adcd --no-progress
+          #
+          # Get EnterpriseServer PublicIp from metadata to avoid circular reference
+          #
+          TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+          EnterpriseServerPrivateIp=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.254/latest/meta-data/local-ipv4)
+          EnterpriseServerPublicDns=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.254/latest/meta-data/public-hostname)
+          #
+          # Update server configuration to listen on the public IP vs the private one
+          #
+          echo "HTTPS_HOST_ALIAS=${!EnterpriseServerPublicDns}" >> /opt/ibm/zDT/zDTServer/server.env
+          #
+          # NOW START THE SERVER
+          #
+          #
+          # Configure image storage (ie connect EE with FTP)
+          #
+          curl -k -u zdtadmin:password -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' \
+              -d '{
+                  "hostname": '"\"${!EnterpriseServerPrivateIp}\""',
+                  "type": "FTP",
+                  "base-directory": "/home/zdtftp",
+                  "port": 21,
+                  "username": "zdtftp",
+                  "password": "zdtftp"
+              }' 'https://localhost:9443/ZDTREST/zdtrs/image-store-services/store'
+          
+          # sample response:
+          # {"uuid":"7e5baeac-e4be-4937-9d9c-ca57adcc8bdc","creation-time":1663194595709,"deletable-details":{"deletable":true,"explanations":[]},"hostname":"172.31.54.185","description":null,"base-directory":"/home/zdtftp","port":21,"username":"zdtftp","password":"zdtftp","type":"FTP"}
+          #
+          # Validate image store service connectivity
+          #
+          curl -k -u zdtadmin:password -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' \
+              -d '{
+                  "hostname": '"\"${!EnterpriseServerPrivateIp}\""',
+                  "type": "FTP",
+                  "base-directory": "/home/zdtftp",
+                  "port": 21,
+                  "username": "zdtftp",
+                  "password": "zdtftp" }' \
+              'https://localhost:9443/ZDTREST/zdtrs/image-store-services/validate'
+          #
+          # Configure license server
+          #
+          curl -k -u zdtadmin:password -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' \
+              -d '{
+                  "label": "main",
+                  "hostname": '"\"${LicenseServer.PrivateIp}\""',
+                  "description": "Main software license server",
+                  "port": 9451,
+                  "type": "SOFTWARE",
+                  "connection-type": "TCP",
+                  "priority": "PRIMARY"
+                  }' \
+              'https://localhost:9443/ZDTREST/zdtrs/license-services/license-server'
+          #
+          # Load ADCD volumes to be available as source environments
+          # running with PUT will ensure it updates adcd packages definitions from ftp
+          # while GET will only retrieve cached ones (ie any time you add new ones, use PUT)
+          #
+          curl -k -u zdtadmin:password -X PUT 'https://localhost:9443/ZDTREST/zdtrs/adcd-services/packages' \
+              --header 'accept: application/json;charset=utf-8'
+          # Sample response:
+          # [{
+          #   "id": 708,
+          #   "uuid": "3d3e891b-f961-45c8-9a0e-cc030906dca0",
+          #   "name": "z/OS V2.4 May 2020",
+          #   "rsu": "2003",
+          #   "restoreDataset": true,
+          #   "zsystemInformation": null,
+          #   "zdtVolumeSms": true,
+          #   "restoreDb2": true
+          # }]
+          #
+          #
+          # Get the component names and save them in the json file.
+          # Yes, it is passed as 'host', to be compatible with how you load volumes from the real Z system.
+          #
+          curl -k -u zdtadmin:password -X GET https://localhost:9443/ZDTREST/zdtrs/componentServices/components?host=${ADCDVersion} \
+              --header  'accept: */*"' > components.json
+          components=$(jq -r "[.[] | {name: .name}]" components.json)
+          # adcdversion=$(jq -r ".[1].zSystem.hostname" components.json)
+          #
+          # Create image from all components
+          #
+          #!/bin/bash
+          #
+          # OpenAPI doc says to use getzSystem vs zSystem, tested it out to verify it's a typo
+          curl -k -u zdtadmin:password -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' \
+              -d '{
+                  "name": "All components",
+                  "zSystem": { "hostname": '"\"${ADCDVersion}\""' },
+                  "ftpSystem": { "hostname": '"\"${!EnterpriseServerPrivateIp}\""' },
+                  "components": '"${!components}"'
+                  }' \
+              'https://localhost:9443/ZDTREST/zdtrs/appServices/ADCDApplicationImage'
+          echo "Enterprise Server installation finished, use <hostname>:9443/api/explorer to explore configuration calls"
+      Tags:
+        - Key: Name
+          Value: !Sub zDT-EC2-Instance-EnterpriseServer${AWS::StackName}
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+
