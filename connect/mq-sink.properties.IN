@@ -1,0 +1,17 @@
+name = test.mq.sink.connector
+
+connector.class=io.confluent.connect.jms.IbmMqSinkConnector
+key.converter=org.apache.kafka.connect.storage.StringConverter
+value.converter=org.apache.kafka.connect.storage.StringConverter
+
+mq.hostname=""
+mq.channel=*
+mq.queue.manager=CSQ9
+mq.transport.type=bindings
+topics=YOUR_MQ_SINK_TOPIC
+
+jms.destination.name=YOUR_QUEUE
+jms.destination.type=queue
+
+mq.user.name=""
+mq.password=""

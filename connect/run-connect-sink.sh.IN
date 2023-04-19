@@ -1,0 +1,2 @@
+export LIBPATH=$LIBPATH:YOUR_LIB_PATH
+./connect/bin/connect-standalone connect/etc/kafka/connect-standalone.properties connect/etc/kafka/mq-sink.properties

@@ -1,0 +1,5 @@
+Can use SCP to copy to ensure proper encoding. Should include text files
+such as property files (which can go to etc/kafka) and shell scripts
+(which can go to bin).
+
+
