@@ -5,9 +5,9 @@ Building streaming data pipelines involving data on a z/OS mainframe can be chal
 ## Repository Structure
 
 The subdirectories in this repository are *provision*, *configure*, and *connect*. 
-1. *Provision* shows steps and provides utilities for provisioning ZD&T in AWS. 
-1. *configure* includes tooling for installing Confluent Connect on Z on a target mainframe instance.
-1. *connect* provides references for pointing Connect on Z to Confluent Cloud.
+1. _provision_ shows steps and provides utilities for provisioning ZD&T in AWS. 
+1. _configure_ includes tooling for installing Confluent Connect on Z on a target mainframe instance.
+1. _connect_ provides references for pointing Connect on Z to Confluent Cloud.
 
 ## Provisioning
 Infrastructure.cf.yaml.IN is based on the IBM cloudformation template at ____ for spinning up ZD&T. We've made some modifications to make it work more smoothly in this example. Edit infrastructure.cf.yaml.IN to include your AMI, S3 bucket and your AWS keypair, then run cloudformation to invoke.
