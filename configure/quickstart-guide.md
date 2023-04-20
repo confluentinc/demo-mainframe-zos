@@ -1,38 +1,28 @@
-Introduction
-This document serves as an implementation guide for Confluent Connect on Z, specifically using the IBM MQ source/sink connectors. This solution will run the connect framework and connectors in zIIP space, in bindings mode. 
+# Introduction
+This document details the steps automated by the scripts in the repository. It serves as an implementation guide for Confluent Connect on Z, specifically using the IBM MQ source/sink connectors. This solution will run the connect framework and connectors in zIIP space, in bindings mode. 
 
 
-Assumptions and Pre-Work
+# Assumptions and Pre-Work
 You will need to know some information about the environment and will likely need to work with other teams in your org for security, user administration, Kafka endpoints and MQ SMEs. This guide assumes you have zOS v2r4 or newer, Java 8 or 10 (know the version and the path) and zIIP access. You will additionally need to have access to:
+-SSH/SFTP (with associated ports, usually 22 and/or 443)
+-USS (with a user that can r/w/x from their home)
+-USS User should have 5G of disk space and a 2G Java Heap
+-Ports for Confluent (8082, 8083)
+-What is the QMGR and QUEUE name?
+-What is the Kafka info (bootstrap, key, secret)?
+-What is the Java path? (e.g. /usr/lpp/mqm/V9R1M0/java/lib) 
 
-SSH/SFTP (with associated ports, usually 22 and/or 443)
+_Files to run Connect on Z_
+1. Ensure libmqjbnd.so libmqjbnd64.so are in /java/lib and /java64/lib/ respectively. 
+1. Get the MQ All Client JAR from IBM and put it in /java/lib/ (com.ibm.mq.allclient.jar)
+1. Download the IBM MQ Source and Sink connectors for z/OS from Confluent Hub. Extract them in your USS home dir. 
+1. Download the Connect on z/OS tar file. Extract it in your USS home dir. 
 
-USS (with a user that can r/w/x from their home)
-
-USS User should have 5G of disk space and a 2G Java Heap
-
-Ports for Confluent (8082, 8083)
-
-What is the QMGR and QUEUE name?
-
-What is the Kafka info (bootstrap, key, secret)?
-
-What is the Java path? (e.g. /usr/lpp/mqm/V9R1M0/java/lib) 
-
-3 Main files to run Connect on Z
-Ensure libmqjbnd.so libmqjbnd64.so are in /java/lib and /java64/lib/ respectively. Get the MQ All Client JAR from IBM and put it in /java/lib/ (com.ibm.mq.allclient.jar)
-Download the IBM MQ Source and Sink connectors for z/OS from Confluent Hub. Extract them in your USS home dir. 
-
-Download the Connect on z/OS tar file. Extract it in your USS home dir. 
-
-Configure and Launch
-We will be going through similar steps as in this short video. 
+# Configure and Launch
 
 There are three main files involved. They are all in the Connect sub directory, where you extracted them in the pre-work. For example /u/confluent/confluent-connect. Move to that directory and you will see /bin and /etc, which are the only two directories in scope. 
 
 Inside /bin, we want to edit connect-standalone.properties. This file sets up the Connect framework itself, including the endpoint to produce to, credentials and path info. You will need the boostrap, key and secret from the destination Kafka cluster. For example Confluent Cloud or self-managed Confluent Platform. 
-
-
 
 bootstrap.servers=YOUR_KAFKA_BOOTSTRAP:9092
 key.converter=org.apache.kafka.connect.storage.StringConverter
