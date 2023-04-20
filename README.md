@@ -5,14 +5,14 @@ Building streaming data pipelines involving data on a z/OS mainframe can be chal
 ## Repository Structure
 
 The subdirectories in this repository are *provision*, *configure*, and *connect*. 
-1. _provision_ shows steps and provides utilities for provisioning ZD&T in AWS. 
-1. _configure_ includes tooling for installing Confluent Connect on Z on a target mainframe instance.
-1. _connect_ provides references for pointing Connect on Z to Confluent Cloud.
+1. **provision** shows steps and provides utilities for provisioning ZD&T in AWS. 
+1. **configure** includes tooling for installing Confluent Connect on Z on a target mainframe instance.
+1. **connect** provides references for pointing Connect on Z to Confluent Cloud.
 
 ## Provisioning
 Infrastructure.cf.yaml.IN is based on the IBM cloudformation template at ____ for spinning up ZD&T. We've made some modifications to make it work more smoothly in this example. Edit infrastructure.cf.yaml.IN to include your AMI, S3 bucket and your AWS keypair, then run cloudformation to invoke.
 
-CLOUD_FORMATION_COMMAND
+    aws cloudformation deploy --template-file ./infrastructure.cf.yaml --stack-name name-of-stack --capabilities CAPABILITY_IAM
 
 ## Deploying Confluent
 
@@ -27,16 +27,22 @@ The binary package includes jar files and zip files constituting a Connect on Z 
 
 Copy the binary package to Z/OS as follows:
 
-SFTP COMMAND
+    sftp -P 2022 ibmuser@34.222.94.162
+    mkdir cflt-zos
+    cd cflt-zos
+    put -r bin-package
 
 ### Text Package
 
 The text package includes shell scripts and configuration files customized for the z deployment and for Conflunet Cloud. The script generate-text-package.sh takes a completed env.sh file as input and generates the configuration files necessary for Connect-on-Z. Copy the text package to Z/OS as follows:
 
-SCP COMMAND
+    scp -P -r text-package ibmuser@34.222.94.162:~/cflt-zos
 
 ## Running Connect on Z
 
 From ZD&T, run 
 
-CONNECT_STANDALONE_COMMAND
+    export LIB_PATH=$LIB_PATH:path_to_lib
+    
+    ./connect-standalone ../etc/kafka/connect-standalone.properties ../etc/kafka/mq-source.properties
+
