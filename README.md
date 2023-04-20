@@ -9,12 +9,12 @@ The subdirectories in this repository are *provision*, *configure*, and *connect
 1. **configure** includes tooling for installing Confluent Connect on Z on a target mainframe instance.
 1. **connect** provides references for pointing Connect on Z to Confluent Cloud.
 
-## Provisioning
+## PROVISION: Create Z/OS instance and install ZD&T in AWS
 Infrastructure.cf.yaml.IN is based on the IBM cloudformation template at ____ for spinning up ZD&T. We've made some modifications to make it work more smoothly in this example. Edit infrastructure.cf.yaml.IN to include your AMI, S3 bucket and your AWS keypair, then run cloudformation to invoke.
 
     aws cloudformation deploy --template-file ./infrastructure.cf.yaml --stack-name name-of-stack --capabilities CAPABILITY_IAM
 
-## Deploying Confluent
+## CONFIGURE: Install and Configure Connect on Z
 
 The shell scripts attempt to automate configuration and setup required to deploy Confluent to the mainframe. Since they're encoded differently we package them separately and copy them to the mainframe differently. 
 
@@ -38,7 +38,7 @@ The text package includes shell scripts and configuration files customized for t
 
     scp -P -r text-package ibmuser@34.222.94.162:~/cflt-zos
 
-## Running Connect on Z
+## Running Connect on Z to Connect to Confluent Cloud
 
 From ZD&T, run 
 
