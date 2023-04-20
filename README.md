@@ -38,3 +38,5 @@ SCP COMMAND
 ## Running Connect on Z
 
 From ZD&T, run 
+
+CONNECT_STANDALONE_COMMAND
