@@ -38,7 +38,7 @@ The text package includes shell scripts and configuration files customized for t
 
     scp -P -r text-package ibmuser@34.222.94.162:~/cflt-zos
 
-## Running Connect on Z to Connect to Confluent Cloud
+## CONNECT: Running Connect on Z to Connect to Confluent Cloud
 
 From ZD&T, run 
 
