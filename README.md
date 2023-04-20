@@ -5,8 +5,8 @@ Building streaming data pipelines involving data on a z/OS mainframe can be chal
 ## Repository Structure
 
 The subdirectories in this repository are *provision*, *configure*, and *connect*. 
-1. *Provision* includes utilities for provisioning ZD&T in AWS. 
-1. *configure* provides tooling for installing Confluent Connect on Z on a target mainframe instance.
+1. *Provision* shows steps and provides utilities for provisioning ZD&T in AWS. 
+1. *configure* includes tooling for installing Confluent Connect on Z on a target mainframe instance.
 1. *connect* provides references for pointing Connect on Z to Confluent Cloud.
 
 ## Provisioning
